@@ -1,0 +1,7 @@
+{
+  "name": "plugin-manager",
+  "description": "Browse, explain, and install Claude Code plugins using natural language.",
+  "author": {
+    "name": "zong_wei_lu"
+  }
+}

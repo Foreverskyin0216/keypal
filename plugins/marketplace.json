@@ -1,0 +1,12 @@
+{
+  "name": "local-plugins",
+  "description": "Custom local plugins",
+  "plugins": [
+    {
+      "name": "plugin-manager",
+      "description": "Browse, explain, and install Claude Code plugins using natural language.",
+      "source": "./plugin-manager",
+      "category": "productivity"
+    }
+  ]
+}
