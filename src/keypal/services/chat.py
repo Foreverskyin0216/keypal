@@ -130,7 +130,7 @@ class ChatService:
             system_prompt=self._system_prompt,
             model=settings.claude_model,
             permission_mode="bypassPermissions",
-            max_turns=30,
+            max_turns=300,
             plugins=self._discover_plugins(),
             include_partial_messages=True,
             **({"mcp_servers": mcp} if mcp else {}),
