@@ -19,7 +19,8 @@ set -uo pipefail
 CHANNEL="all"
 MAX_RESTARTS=10
 COOLDOWN=5
-PROJECT_DIR="${HOME}/Workspace/projects/keypal"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

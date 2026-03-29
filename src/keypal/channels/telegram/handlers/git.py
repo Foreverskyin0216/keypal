@@ -13,7 +13,7 @@ def _git(cmd: str) -> str:
     """Run a git command in the project directory and return output."""
     from pathlib import Path
 
-    project_dir = Path.home() / "Workspace" / "projects" / "keypal"
+    project_dir = Path(__file__).resolve().parents[5]
     result = subprocess.run(
         ["git"] + cmd.split(),
         capture_output=True,
