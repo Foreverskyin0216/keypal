@@ -19,6 +19,7 @@ def _build_commands() -> list[BotCommand]:
     commands.extend(
         [
             BotCommand("usage", "View token spending"),
+            BotCommand("restart", "Restart the bot"),
             BotCommand("reset", "Start a fresh conversation"),
         ]
     )

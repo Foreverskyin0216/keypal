@@ -48,23 +48,45 @@ DraftCallback = Callable[[str], Coroutine[Any, Any, None]]
 StatusCallback = Callable[[str], Coroutine[Any, Any, None]]
 FileCallback = Callable[[str], Coroutine[Any, Any, None]]  # called with file path
 
-# Friendly tool status messages
-_TOOL_LABELS: dict[str, str] = {
-    "Read": "~ reading ...",
-    "Write": "~ writing ...",
-    "Edit": "~ editing ...",
-    "Bash": "~ running ...",
-    "Glob": "~ searching ...",
-    "Grep": "~ searching ...",
-    "WebSearch": "~ looking up ...",
-    "WebFetch": "~ fetching ...",
-    "Agent": "~ thinking ...",
-    "Skill": "~ working ...",
-}
 
+def _tool_status(tool_name: str, tool_input_json: str = "") -> str:
+    """Build a concise status line from tool name and partial input."""
+    import json as _json
+    import os
 
-def _tool_status(tool_name: str) -> str:
-    return _TOOL_LABELS.get(tool_name, f"~ {tool_name} ...")
+    hint = ""
+    try:
+        data = _json.loads(tool_input_json) if tool_input_json else {}
+    except _json.JSONDecodeError:
+        data = {}
+
+    if tool_name in ("Read", "Write", "Edit"):
+        path = data.get("file_path", "")
+        hint = os.path.basename(path) if path else ""
+    elif tool_name == "Bash":
+        cmd = data.get("command", "")
+        hint = cmd[:40].split("\n")[0] if cmd else ""
+    elif tool_name in ("Grep", "Glob"):
+        hint = data.get("pattern", "")[:30]
+    elif tool_name == "WebSearch":
+        hint = data.get("query", "")[:30]
+    elif tool_name == "WebFetch":
+        hint = data.get("url", "")[:40]
+
+    labels = {
+        "Read": "~ reading",
+        "Write": "~ writing",
+        "Edit": "~ editing",
+        "Bash": "~ running",
+        "Glob": "~ searching",
+        "Grep": "~ searching",
+        "WebSearch": "~ looking up",
+        "WebFetch": "~ fetching",
+        "Agent": "~ thinking",
+        "Skill": "~ working",
+    }
+    label = labels.get(tool_name, f"~ {tool_name}")
+    return f"{label} ... {hint}" if hint else f"{label} ..."
 
 
 class ChatService:
@@ -108,7 +130,7 @@ class ChatService:
             system_prompt=self._system_prompt,
             model=settings.claude_model,
             permission_mode="bypassPermissions",
-            max_turns=3,
+            max_turns=30,
             plugins=self._discover_plugins(),
             include_partial_messages=True,
             **({"mcp_servers": mcp} if mcp else {}),
@@ -172,16 +194,16 @@ class ChatService:
                 event = msg.event
                 event_type = event.get("type", "")
 
-                # Tool use started — send status as separate message
+                # Tool use started
                 if event_type == "content_block_start":
                     content_block = event.get("content_block", {})
                     if content_block.get("type") == "tool_use":
                         current_tool = content_block.get("name", "")
                         tool_input_json = ""
-                        status_line = _tool_status(current_tool)
-                        if on_status and status_line:
+                        # Send initial generic status (will update with details later)
+                        if on_status:
                             with contextlib.suppress(Exception):
-                                await on_status(status_line)
+                                await on_status(_tool_status(current_tool))
 
                 # Tool use finished — check if it wrote a file
                 elif event_type == "content_block_stop":
@@ -201,9 +223,15 @@ class ChatService:
                 # Streaming deltas (text + tool input)
                 elif event_type == "content_block_delta":
                     delta = event.get("delta", {})
-                    # Accumulate tool input JSON for file detection
+                    # Accumulate tool input JSON and update status with details
                     if delta.get("type") == "input_json_delta":
                         tool_input_json += delta.get("partial_json", "")
+                        # Try to update status with richer info
+                        if on_status and current_tool and len(tool_input_json) > 30:
+                            partial = tool_input_json if tool_input_json.startswith("{") else "{" + tool_input_json
+                            detail = _tool_status(current_tool, partial)
+                            with contextlib.suppress(Exception):
+                                await on_status(detail)
                     elif delta.get("type") == "text_delta":
                         text_chunk = delta.get("text", "")
                         accumulated += text_chunk

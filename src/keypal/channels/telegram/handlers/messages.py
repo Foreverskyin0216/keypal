@@ -138,8 +138,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     on_status = _make_status_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
 
+    # Show typing indicator while processing
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
     try:
-        response = await message_queue.enqueue(user_id, text, on_draft=on_draft, on_status=on_status, on_file=on_file)
+        response = await message_queue.enqueue(
+            user_id,
+            text,
+            on_draft=on_draft,
+            on_status=on_status,
+            on_file=on_file,
+        )
         await update.message.reply_text(_truncate(response))
     except Exception:
         logger.exception("Failed to process message for user %d", user_id)

@@ -3,10 +3,22 @@
 from keypal.services.chat import UsageStats, _tool_status
 
 
-def test_tool_status_known() -> None:
+def test_tool_status_no_input() -> None:
     assert _tool_status("Read") == "~ reading ..."
     assert _tool_status("Bash") == "~ running ..."
     assert _tool_status("WebSearch") == "~ looking up ..."
+
+
+def test_tool_status_with_input() -> None:
+    result = _tool_status("Read", '{"file_path": "/home/user/projects/app/config.py"}')
+    assert "config.py" in result
+    assert "~ reading" in result
+
+    result = _tool_status("Bash", '{"command": "npm install express"}')
+    assert "npm install express" in result
+
+    result = _tool_status("WebSearch", '{"query": "python telegram bot streaming"}')
+    assert "python telegram bot" in result
 
 
 def test_tool_status_unknown() -> None:

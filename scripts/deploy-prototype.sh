@@ -52,15 +52,18 @@ if [ -n "$EXISTING_PID" ] && kill -0 "$EXISTING_PID" 2>/dev/null; then
 fi
 
 # Auto-assign port if not specified
+PORT_MIN="${KEYPAL_PORT_MIN:-3001}"
+PORT_MAX="${KEYPAL_PORT_MAX:-3099}"
+
 if [ -z "$PORT" ]; then
   USED_PORTS=$(jq -r '[.[].port] | sort | .[]' "$REGISTRY" 2>/dev/null)
-  for p in $(seq 3001 3099); do
+  for p in $(seq "$PORT_MIN" "$PORT_MAX"); do
     if ! echo "$USED_PORTS" | grep -q "^${p}$" && ! lsof -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
       PORT="$p"
       break
     fi
   done
-  [ -n "$PORT" ] || result "error" "No available port in 3001-3099"
+  [ -n "$PORT" ] || result "error" "No available port in ${PORT_MIN}-${PORT_MAX}"
 fi
 
 # Auto-detect start command if not specified
@@ -125,4 +128,9 @@ UPDATED=$(jq --arg n "$NAME" --arg p "$PORT" --arg pid "$PID" --arg dir "$DIR" -
 ' "$REGISTRY")
 echo "$UPDATED" > "$REGISTRY"
 
-result "ok" "Deployed successfully" "$PORT" "$PID" "http://localhost:${PORT}"
+# Get public IP (cloud metadata > external service > fallback to localhost)
+PUBLIC_IP=$(curl -sf -m 2 http://169.254.169.254/opc/v1/vnics/ 2>/dev/null | jq -r '.[0].publicIp // empty' 2>/dev/null)
+[ -z "$PUBLIC_IP" ] && PUBLIC_IP=$(curl -sf -m 2 ifconfig.me 2>/dev/null)
+[ -z "$PUBLIC_IP" ] && PUBLIC_IP="localhost"
+
+result "ok" "Deployed successfully" "$PORT" "$PID" "http://${PUBLIC_IP}:${PORT}"

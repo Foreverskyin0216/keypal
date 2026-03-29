@@ -1,3 +1,6 @@
+import os
+import signal
+
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -27,6 +30,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         lines.extend(
             [
                 "/usage — View token spending",
+                "/restart — Restart the bot",
                 "/reset — Start a fresh conversation",
                 "/help — Show this message",
             ]
@@ -49,8 +53,17 @@ async def usage_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
 
 
+async def restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Restart the bot. Guardian will auto-restart the process."""
+    if update.message:
+        await update.message.reply_text("Restarting... be right back ~")
+        # Exit with non-zero so guardian restarts us
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
 def register_command_handlers(application: Application) -> None:  # type: ignore[type-arg]
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("reset", reset_command))
     application.add_handler(CommandHandler("usage", usage_command))
+    application.add_handler(CommandHandler("restart", restart_command))
