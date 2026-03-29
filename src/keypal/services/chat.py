@@ -273,7 +273,12 @@ class ChatService:
                     self._usage[user_id] = UsageStats()
                 self._usage[user_id].record(cost)
 
-        return accumulated.strip() or "..."
+        import re
+
+        result = accumulated.strip()
+        # Strip ralph-loop promise tags from output
+        result = re.sub(r"<promise>.*?</promise>", "", result).strip()
+        return result or "..."
 
     def get_usage(self, user_id: int) -> UsageStats:
         """Get usage stats for a user."""
