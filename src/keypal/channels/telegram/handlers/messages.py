@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from keypal.channels.telegram import chat_service
-from keypal.services.chat import DraftCallback, FileCallback
+from keypal.services.chat import DraftCallback, FileCallback, KeepAliveCallback
 from keypal.services.queue import MessageQueue
 
 logger = logging.getLogger(__name__)
@@ -92,9 +92,16 @@ async def _chat_handler(
     message: str,
     on_draft: DraftCallback | None = None,
     on_file: FileCallback | None = None,
+    on_keepalive: KeepAliveCallback | None = None,
 ) -> str:
     """Queue-compatible handler that forwards to ChatService."""
-    return await chat_service.reply(user_id, message, on_draft=on_draft, on_file=on_file)
+    return await chat_service.reply(
+        user_id,
+        message,
+        on_draft=on_draft,
+        on_file=on_file,
+        on_keepalive=on_keepalive,
+    )
 
 
 message_queue = MessageQueue(handler=_chat_handler)
@@ -117,7 +124,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     on_draft = _make_draft_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
 
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    async def on_keepalive() -> None:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    await on_keepalive()
 
     try:
         response = await message_queue.enqueue(
@@ -125,6 +135,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             text,
             on_draft=on_draft,
             on_file=on_file,
+            on_keepalive=on_keepalive,
         )
         await update.message.reply_text(_truncate(response))
     except Exception:
@@ -156,7 +167,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     on_draft = _make_draft_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
 
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    async def on_keepalive() -> None:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    await on_keepalive()
 
     try:
         response = await message_queue.enqueue(
@@ -164,6 +178,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             message,
             on_draft=on_draft,
             on_file=on_file,
+            on_keepalive=on_keepalive,
         )
         await update.message.reply_text(_truncate(response))
     except Exception:
@@ -196,7 +211,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     on_draft = _make_draft_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
 
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    async def on_keepalive() -> None:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    await on_keepalive()
 
     try:
         response = await message_queue.enqueue(
@@ -204,6 +222,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             message,
             on_draft=on_draft,
             on_file=on_file,
+            on_keepalive=on_keepalive,
         )
         await update.message.reply_text(_truncate(response))
     except Exception:

@@ -47,6 +47,7 @@ class UsageStats:
 DraftCallback = Callable[[str], Coroutine[Any, Any, None]]
 StatusCallback = Callable[[str], Coroutine[Any, Any, None]]
 FileCallback = Callable[[str], Coroutine[Any, Any, None]]  # called with file path
+KeepAliveCallback = Callable[[], Coroutine[Any, Any, None]]  # periodic typing indicator
 
 
 def _tool_status(tool_name: str, tool_input_json: str = "") -> str:
@@ -158,6 +159,7 @@ class ChatService:
         on_draft: DraftCallback | None = None,
         on_status: StatusCallback | None = None,
         on_file: FileCallback | None = None,
+        on_keepalive: KeepAliveCallback | None = None,
     ) -> str:
         """Send a message and return Claude's text response.
 
@@ -186,10 +188,19 @@ class ChatService:
 
         accumulated = ""
         last_draft_time = 0.0
+        last_keepalive_time = 0.0
         current_tool = ""
         tool_input_json = ""
 
         async for msg in client.receive_response():
+            # Refresh typing indicator every 4 seconds
+            if on_keepalive:
+                now = time.monotonic()
+                if now - last_keepalive_time >= 4.0:
+                    last_keepalive_time = now
+                    with contextlib.suppress(Exception):
+                        await on_keepalive()
+
             if isinstance(msg, StreamEvent):
                 event = msg.event
                 event_type = event.get("type", "")
