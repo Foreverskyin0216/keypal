@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from keypal.channels.telegram import chat_service
-from keypal.services.chat import DraftCallback, FileCallback, StatusCallback
+from keypal.services.chat import DraftCallback, FileCallback
 from keypal.services.queue import MessageQueue
 
 logger = logging.getLogger(__name__)
@@ -40,25 +40,6 @@ def _make_draft_callback(bot: object, chat_id: int) -> DraftCallback:
             logger.debug("send_message_draft failed", exc_info=True)
 
     return on_draft
-
-
-def _make_status_callback(bot: object, chat_id: int) -> StatusCallback:
-    """Create a status callback that sends tool status as separate messages."""
-    last_status_msg_id: list[int | None] = [None]
-
-    async def on_status(text: str) -> None:
-        import contextlib
-
-        try:
-            if last_status_msg_id[0] is not None:
-                with contextlib.suppress(Exception):
-                    await bot.delete_message(chat_id=chat_id, message_id=last_status_msg_id[0])  # type: ignore[attr-defined]
-            msg = await bot.send_message(chat_id=chat_id, text=text)  # type: ignore[attr-defined]
-            last_status_msg_id[0] = msg.message_id
-        except Exception:
-            logger.debug("Status message failed", exc_info=True)
-
-    return on_status
 
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -110,11 +91,10 @@ async def _chat_handler(
     user_id: int,
     message: str,
     on_draft: DraftCallback | None = None,
-    on_status: StatusCallback | None = None,
     on_file: FileCallback | None = None,
 ) -> str:
     """Queue-compatible handler that forwards to ChatService."""
-    return await chat_service.reply(user_id, message, on_draft=on_draft, on_status=on_status, on_file=on_file)
+    return await chat_service.reply(user_id, message, on_draft=on_draft, on_file=on_file)
 
 
 message_queue = MessageQueue(handler=_chat_handler)
@@ -135,10 +115,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         text = f"Modify the scheduled task '{name}' (current: {pending.get('description', '')}). User says: {text}"
 
     on_draft = _make_draft_callback(context.bot, chat_id)
-    on_status = _make_status_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
 
-    # Show typing indicator while processing
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
@@ -146,7 +124,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             user_id,
             text,
             on_draft=on_draft,
-            on_status=on_status,
             on_file=on_file,
         )
         await update.message.reply_text(_truncate(response))
@@ -177,15 +154,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     message = f"[User uploaded an image to {file_path}{caption_part}]. You can view it with the Read tool."
 
     on_draft = _make_draft_callback(context.bot, chat_id)
-    on_status = _make_status_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
+
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
         response = await message_queue.enqueue(
             user_id,
             message,
             on_draft=on_draft,
-            on_status=on_status,
             on_file=on_file,
         )
         await update.message.reply_text(_truncate(response))
@@ -217,15 +194,15 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     message = f"[User uploaded a file: {file_path} ({mime}, {size} bytes){caption_part}]. Read it with the Read tool."
 
     on_draft = _make_draft_callback(context.bot, chat_id)
-    on_status = _make_status_callback(context.bot, chat_id)
     on_file = _make_file_callback(context.bot, chat_id)
+
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     try:
         response = await message_queue.enqueue(
             user_id,
             message,
             on_draft=on_draft,
-            on_status=on_status,
             on_file=on_file,
         )
         await update.message.reply_text(_truncate(response))
