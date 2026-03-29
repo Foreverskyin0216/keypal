@@ -19,8 +19,8 @@ set -o pipefail
 CHANNEL="all"
 MAX_RESTARTS=10
 COOLDOWN=5
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPT_REAL="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+PROJECT_DIR="$(cd "$(dirname "$SCRIPT_REAL")/.." && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
