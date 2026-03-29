@@ -51,19 +51,14 @@ bg-run: setup
 		echo "Started with guardian (PID $$(cat $(PID_DIR)/guardian.pid), log: $(LOG_DIR)/guardian.log)"; \
 	fi
 
-## stop: Stop background bot
+## stop: Stop background bot (kills all related processes)
 stop:
-	@for pidfile in $(PID_DIR)/*.pid; do \
-		[ -f "$$pidfile" ] || continue; \
-		pid=$$(cat "$$pidfile"); \
-		name=$$(basename "$$pidfile" .pid); \
-		if kill -0 "$$pid" 2>/dev/null; then \
-			kill "$$pid" && echo "Stopped $$name (PID $$pid)"; \
-		else \
-			echo "$$name not running"; \
-		fi; \
-		rm -f "$$pidfile"; \
-	done
+	@pkill -f "guardian.sh" 2>/dev/null; \
+	pkill -f "python.*keypal" 2>/dev/null; \
+	sleep 1; \
+	pkill -9 -f "python.*keypal" 2>/dev/null; \
+	rm -f $(PID_DIR)/*.pid; \
+	echo "Stopped all keypal processes"
 
 ## status: Show running status
 status:

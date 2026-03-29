@@ -54,6 +54,13 @@ RESTART_COUNT=0
 
 cd "$PROJECT_DIR" || { log "ERROR: Cannot cd to $PROJECT_DIR"; exit 1; }
 
+# Kill any leftover bot/guardian processes (except ourselves)
+SELF_PID=$$
+for pid in $(pgrep -f "python.*keypal" 2>/dev/null) $(pgrep -f "guardian.sh" 2>/dev/null); do
+  [ "$pid" != "$SELF_PID" ] && kill -9 "$pid" 2>/dev/null
+done
+sleep 1
+
 log "Guardian started (channel=$CHANNEL, max_restarts=$MAX_RESTARTS, cooldown=$COOLDOWN)"
 
 while true; do
