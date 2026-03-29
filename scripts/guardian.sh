@@ -14,7 +14,7 @@
 # Use with nohup or systemd for background operation.
 #
 
-set -uo pipefail
+set -o pipefail
 
 CHANNEL="all"
 MAX_RESTARTS=10
@@ -31,6 +31,9 @@ while [[ $# -gt 0 ]]; do
     *) shift ;;
   esac
 done
+
+# Source .env if it exists
+[ -f "${PROJECT_DIR}/.env" ] && set -a && . "${PROJECT_DIR}/.env" && set +a
 
 LOG_DIR="${HOME}/logs/keypal"
 mkdir -p "$LOG_DIR"
