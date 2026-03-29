@@ -25,11 +25,30 @@ PID=$(jq -r --arg n "$NAME" '.[$n].pid // empty' "$REGISTRY")
 
 [ -n "$PID" ] || result "error" "Service '$NAME' not found in registry"
 
-# Kill process
+# Kill process and all children (process group)
 if kill -0 "$PID" 2>/dev/null; then
-  kill "$PID" 2>/dev/null || true
+  # Try to kill the whole process group
+  PGID=$(ps -o pgid= -p "$PID" 2>/dev/null | tr -d ' ')
+  if [ -n "$PGID" ] && [ "$PGID" != "1" ]; then
+    kill -- -"$PGID" 2>/dev/null || true
+  else
+    kill "$PID" 2>/dev/null || true
+  fi
   sleep 1
-  kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null || true
+  # Force kill anything still alive
+  if kill -0 "$PID" 2>/dev/null; then
+    if [ -n "$PGID" ] && [ "$PGID" != "1" ]; then
+      kill -9 -- -"$PGID" 2>/dev/null || true
+    else
+      kill -9 "$PID" 2>/dev/null || true
+    fi
+  fi
+fi
+
+# Also kill anything still listening on the port
+PORT=$(jq -r --arg n "$NAME" '.[$n].port // empty' "$REGISTRY")
+if [ -n "$PORT" ]; then
+  fuser -k "$PORT/tcp" 2>/dev/null || true
 fi
 
 # Update status in registry

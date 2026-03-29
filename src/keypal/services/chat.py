@@ -193,7 +193,6 @@ class ChatService:
         tool_input_json = ""
 
         async for msg in client.receive_response():
-            # Refresh typing indicator every 4 seconds
             if on_keepalive:
                 now = time.monotonic()
                 if now - last_keepalive_time >= 4.0:

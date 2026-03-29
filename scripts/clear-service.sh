@@ -29,18 +29,23 @@ result() {
 if [ "$TARGET" = "--all" ]; then
   COUNT=$(jq 'length' "$REGISTRY")
 
-  # Stop all processes
-  jq -r 'to_entries[] | "\(.value.pid)\t\(.value.dir)"' "$REGISTRY" | \
-  while IFS=$'\t' read -r pid dir; do
+  # Stop all processes and children
+  jq -r 'to_entries[] | "\(.value.pid)\t\(.value.port)\t\(.value.dir)"' "$REGISTRY" | \
+  while IFS=$'\t' read -r pid port dir; do
     if [ -n "$pid" ] && [ "$pid" != "null" ] && kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null || true
+      PGID=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+      if [ -n "$PGID" ] && [ "$PGID" != "1" ]; then
+        kill -- -"$PGID" 2>/dev/null || true
+      else
+        kill "$pid" 2>/dev/null || true
+      fi
     fi
+    [ -n "$port" ] && fuser -k "$port/tcp" 2>/dev/null || true
     if [ -n "$dir" ] && [ -d "$dir" ]; then
       rm -rf "$dir"
     fi
   done
 
-  # Wait for processes to die
   sleep 1
 
   # Reset registry and logs
@@ -59,11 +64,24 @@ DIR=$(jq -r --arg n "$TARGET" '.[$n].dir // empty' "$REGISTRY")
 
 [ -n "$PID" ] || [ -n "$DIR" ] || result "error" "Service '$TARGET' not found"
 
-# Stop process
+# Stop process and all children
 if [ -n "$PID" ] && [ "$PID" != "null" ] && kill -0 "$PID" 2>/dev/null; then
-  kill "$PID" 2>/dev/null || true
+  PGID=$(ps -o pgid= -p "$PID" 2>/dev/null | tr -d ' ')
+  if [ -n "$PGID" ] && [ "$PGID" != "1" ]; then
+    kill -- -"$PGID" 2>/dev/null || true
+  else
+    kill "$PID" 2>/dev/null || true
+  fi
   sleep 1
-  kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null || true
+  if kill -0 "$PID" 2>/dev/null; then
+    kill -9 "$PID" 2>/dev/null || true
+  fi
+fi
+
+# Kill anything on the port
+PORT=$(jq -r --arg n "$TARGET" '.[$n].port // empty' "$REGISTRY")
+if [ -n "$PORT" ]; then
+  fuser -k "$PORT/tcp" 2>/dev/null || true
 fi
 
 # Delete project directory
