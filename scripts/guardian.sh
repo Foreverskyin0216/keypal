@@ -70,8 +70,10 @@ while true; do
   EXIT_CODE=$?
 
   if [ $EXIT_CODE -eq 0 ]; then
-    log "Bot exited cleanly (code 0). Stopping guardian."
-    break
+    log "Bot exited (code 0). Restarting..."
+    RESTART_COUNT=0
+    sleep "$COOLDOWN"
+    continue
   fi
 
   RESTART_COUNT=$((RESTART_COUNT + 1))
