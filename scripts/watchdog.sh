@@ -142,7 +142,7 @@ Please:
   fi
 
   # One-shot query — no session, no ongoing cost
-  DIAGNOSIS=$(claude --print --model sonnet "$DIAGNOSE_PROMPT" 2>/dev/null || echo "Claude Code diagnosis unavailable")
+  DIAGNOSIS=$(claude --print --model sonnet --permission-mode bypassPermissions "$DIAGNOSE_PROMPT" 2>/dev/null || echo "Claude Code diagnosis unavailable")
 
   if [ "$NOTIFY" = true ] && [ -n "$DIAGNOSIS" ]; then
     DIAG_MSG=$(cat <<MSG

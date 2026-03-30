@@ -81,7 +81,7 @@ Spawning auto-repair..."
 
   # Spawn Claude Code to diagnose and fix immediately
   if command -v claude >/dev/null 2>&1; then
-    DIAGNOSIS=$(claude --print --model sonnet "Service '${NAME}' just crashed (exit code ${EXIT_CODE}, port ${PORT}, dir: ${DIR}).
+    DIAGNOSIS=$(claude --print --model sonnet --permission-mode bypassPermissions "Service '${NAME}' just crashed (exit code ${EXIT_CODE}, port ${PORT}, dir: ${DIR}).
 
 Last 30 lines of log:
 \`\`\`

@@ -112,7 +112,7 @@ Please diagnose the issue."
 Then fix it and redeploy using: ~/.claude/scripts/deploy-prototype.sh ${name} ${dir} ${port}"
     fi
 
-    DIAGNOSIS=$(claude --print --model sonnet "$PROMPT" 2>/dev/null || echo "Diagnosis unavailable")
+    DIAGNOSIS=$(claude --print --model sonnet --permission-mode bypassPermissions "$PROMPT" 2>/dev/null || echo "Diagnosis unavailable")
     if [ "$NOTIFY" = true ] && [ -n "$DIAGNOSIS" ]; then
       send_telegram "🔍 *Diagnosis: ${name}*
 

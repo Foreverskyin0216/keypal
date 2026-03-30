@@ -90,7 +90,7 @@ Spawning auto-repair..."
   # Spawn Claude Code to diagnose and fix immediately
   if command -v claude >/dev/null 2>&1; then
     log "Running Claude Code auto-repair..."
-    DIAGNOSIS=$(claude --print --model sonnet "The Keypal bot just crashed (exit code ${EXIT_CODE}).
+    DIAGNOSIS=$(cd "$PROJECT_DIR" && claude --print --model sonnet --permission-mode bypassPermissions "The Keypal bot just crashed (exit code ${EXIT_CODE}).
 
 Last 30 lines of log:
 \`\`\`
@@ -101,7 +101,7 @@ Project directory: ${PROJECT_DIR}
 
 Please:
 1. Diagnose what went wrong
-2. Fix the code if possible
+2. Fix the code in this project
 3. The bot will be auto-restarted after your fix" 2>/dev/null || echo "Auto-repair unavailable")
 
     log "Auto-repair result: $(echo "$DIAGNOSIS" | head -5)"
