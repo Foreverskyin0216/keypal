@@ -40,7 +40,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user and update.message:
-        chat_service.reset_session(update.effective_user.id)
+        await chat_service.reset_session(update.effective_user.id)
         await update.message.reply_text("Fresh start! What's on your mind?")
 
 

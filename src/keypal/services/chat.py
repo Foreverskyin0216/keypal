@@ -283,9 +283,11 @@ class ChatService:
         """Get usage stats for a user."""
         return self._usage.get(user_id, UsageStats())
 
-    def reset_session(self, user_id: int) -> None:
-        """Reset a user's session by incrementing the epoch counter."""
+    async def reset_session(self, user_id: int) -> None:
+        """Reset a user's session — new epoch + reconnect client."""
         self._session_epochs[user_id] = self._session_epochs.get(user_id, 0) + 1
+        # Reconnect to ensure clean state
+        await self._reconnect()
 
     async def shutdown(self) -> None:
         if self._client is not None:

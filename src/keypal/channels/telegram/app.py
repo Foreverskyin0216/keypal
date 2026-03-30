@@ -27,7 +27,14 @@ def _build_commands() -> list[BotCommand]:
 
 
 async def post_init(application: Application) -> None:  # type: ignore[type-arg]
+    import contextlib
+
     await application.bot.set_my_commands(_build_commands())
+
+    # Notify allowed users that bot is (back) online
+    for uid in settings.allowed_tg_user_ids:
+        with contextlib.suppress(Exception):
+            await application.bot.send_message(chat_id=uid, text="I'm back :)")
 
 
 def create_telegram_app() -> Application:  # type: ignore[type-arg]
