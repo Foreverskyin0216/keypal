@@ -51,8 +51,6 @@ def _build_plugin_keyboard(plugins: list[dict], page: int = 0) -> InlineKeyboard
     if end < len(plugins):
         nav_row.append(InlineKeyboardButton("Next ▶", callback_data=f"plg:page:{page + 1}"))
     buttons.append(nav_row)
-    buttons.append([InlineKeyboardButton("🔄 Refresh", callback_data=f"plg:refresh:{page}")])
-
     return InlineKeyboardMarkup(buttons)
 
 
@@ -98,21 +96,6 @@ async def plugins_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             installed_count = sum(1 for p in plugins if p.get("installed"))
             await query.edit_message_text(
                 f"🧩 *Plugins* ({installed_count} installed / {len(plugins)} available)",
-                parse_mode="Markdown",
-                reply_markup=keyboard,
-            )
-        return
-
-    if action == "refresh":
-        page = int(value) if value else 0
-        data = _run_script("list-plugins.sh")
-        if isinstance(data, list):
-            if context.user_data is not None:
-                context.user_data["plugins_list"] = data
-            keyboard = _build_plugin_keyboard(data, page=page)
-            installed_count = sum(1 for p in data if p.get("installed"))
-            await query.edit_message_text(
-                f"🧩 *Plugins* ({installed_count} installed / {len(data)} available)",
                 parse_mode="Markdown",
                 reply_markup=keyboard,
             )
