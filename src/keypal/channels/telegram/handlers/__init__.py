@@ -6,6 +6,7 @@ from keypal.channels.telegram.handlers.commands import register_command_handlers
 from keypal.channels.telegram.handlers.danger import register_danger_handlers
 from keypal.channels.telegram.handlers.mcp import register_mcp_handlers
 from keypal.channels.telegram.handlers.messages import register_message_handlers
+from keypal.channels.telegram.handlers.plugins import register_plugin_handlers
 from keypal.channels.telegram.handlers.schedules import register_schedule_handlers
 from keypal.channels.telegram.handlers.services import register_service_handlers
 from keypal.config import settings
@@ -18,6 +19,7 @@ def register_handlers(application: Application) -> None:  # type: ignore[type-ar
     register_command_handlers(application)
     register_service_handlers(application)
     register_schedule_handlers(application)
+    register_plugin_handlers(application)
     register_mcp_handlers(application)
     register_danger_handlers(application)
 

@@ -11,6 +11,7 @@ def _build_commands() -> list[BotCommand]:
         BotCommand("help", "Show available commands"),
         BotCommand("services", "Manage hosted prototypes"),
         BotCommand("schedules", "Manage scheduled tasks"),
+        BotCommand("plugins", "Browse & install plugins"),
         BotCommand("mcp", "Manage MCP server integrations"),
     ]
     if settings.enable_git:
