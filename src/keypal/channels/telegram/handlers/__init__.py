@@ -3,6 +3,7 @@ from telegram.ext import Application, TypeHandler
 
 from keypal.channels.telegram.auth import auth_check
 from keypal.channels.telegram.handlers.commands import register_command_handlers
+from keypal.channels.telegram.handlers.danger import register_danger_handlers
 from keypal.channels.telegram.handlers.mcp import register_mcp_handlers
 from keypal.channels.telegram.handlers.messages import register_message_handlers
 from keypal.channels.telegram.handlers.plugins import register_plugin_handlers
@@ -20,6 +21,7 @@ def register_handlers(application: Application) -> None:  # type: ignore[type-ar
     register_schedule_handlers(application)
     register_plugin_handlers(application)
     register_mcp_handlers(application)
+    register_danger_handlers(application)
 
     if settings.enable_git:
         from keypal.channels.telegram.handlers.git import register_git_handlers

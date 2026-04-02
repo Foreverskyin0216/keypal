@@ -1,5 +1,7 @@
+import asyncio
 import contextlib
 import logging
+import re
 import time
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
@@ -14,6 +16,7 @@ from claude_agent_sdk import (
     StreamEvent,
     TextBlock,
 )
+from claude_agent_sdk.types import HookMatcher, SyncHookJSONOutput
 
 from keypal.config import settings
 
@@ -29,6 +32,123 @@ MCP_REGISTRY = KEYPAL_DIR / "mcp.json"
 DRAFT_UPDATE_INTERVAL = 0.4
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant."
+
+# --- Dangerous command detection ---
+LOG_DIR = Path.home() / "logs" / "keypal"
+DANGER_LOG = LOG_DIR / "dangerous-commands.log"
+AUDIT_LOG = LOG_DIR / "command-audit.log"
+
+DANGEROUS_PATTERNS = [
+    (re.compile(r"\brm\s+(-\S+\s+)*-\S*r"), "recursive delete (rm -r)"),
+    (re.compile(r"\bshred\b"), "shred"),
+    (re.compile(r"\bdd\s+if="), "disk write (dd)"),
+    (re.compile(r"\bmkfs\b"), "filesystem format (mkfs)"),
+    (re.compile(r"\bfdisk\b"), "disk partition (fdisk)"),
+    (re.compile(r"\bparted\b"), "disk partition (parted)"),
+    (re.compile(r">\s*/dev/"), "device write"),
+    (re.compile(r"\bchmod\s+(-[^\s]*)?\s*-R\s+(777|000)\b"), "broad permission change"),
+    (re.compile(r"\bchown\s+(-[^\s]*)?\s*-R\b"), "recursive ownership change"),
+    (re.compile(r"\bkillall\b"), "killall"),
+    (re.compile(r"\bpkill\b"), "pkill"),
+    (re.compile(r"\breboot\b"), "reboot"),
+    (re.compile(r"\bshutdown\b"), "shutdown"),
+    (re.compile(r"\bhalt\b"), "halt"),
+    (re.compile(r"\binit\s+[06]\b"), "init runlevel change"),
+    (re.compile(r"\biptables\s+-F\b"), "firewall flush"),
+    (re.compile(r"\bufw\s+disable\b"), "firewall disable"),
+    (re.compile(r"(curl|wget)\s+.*\|\s*(ba)?sh"), "remote code execution (curl|sh)"),
+    (re.compile(r"\bDROP\s+(DATABASE|TABLE)\b", re.IGNORECASE), "DROP DATABASE/TABLE"),
+    (re.compile(r"\bTRUNCATE\b", re.IGNORECASE), "TRUNCATE"),
+    (re.compile(r"\bgit\s+push\s+--force\b"), "git force push"),
+    (re.compile(r"\bgit\s+reset\s+--hard\b"), "git reset --hard"),
+]
+
+
+def _check_dangerous(command: str) -> str | None:
+    """Return a danger label if the command matches any dangerous pattern, else None."""
+    for pattern, label in DANGEROUS_PATTERNS:
+        if pattern.search(command):
+            return label
+    return None
+
+
+def _audit_log(command: str, danger: str | None = None) -> None:
+    """Append a Bash command to the audit log (and danger log if flagged)."""
+    from datetime import UTC, datetime
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Collapse to single line for log readability
+    cmd_oneline = command.replace("\n", " \\ ")[:500]
+
+    with AUDIT_LOG.open("a") as f:
+        f.write(f"{ts} {cmd_oneline}\n")
+
+    if danger:
+        with DANGER_LOG.open("a") as f:
+            f.write(f"{ts} [{danger}] {cmd_oneline}\n")
+
+
+# --- Pre-execution approval gate ---
+# Callback type: (approval_id, command_preview, danger_label) -> None
+ApprovalSender = Callable[[str, str, str], Coroutine[Any, Any, None]]
+
+APPROVAL_TIMEOUT = 60  # seconds to wait for user response
+
+
+class DangerGate:
+    """Pre-execution approval gate for dangerous commands.
+
+    When a dangerous Bash command is detected by the PreToolUse hook,
+    the gate sends an inline keyboard to Telegram and waits for the
+    user to Allow or Deny before the command executes.
+    """
+
+    def __init__(self) -> None:
+        self._senders: dict[int, ApprovalSender] = {}  # user_id -> send keyboard fn
+        self._pending: dict[str, asyncio.Future[bool]] = {}  # approval_id -> future
+
+    def set_sender(self, user_id: int, sender: ApprovalSender) -> None:
+        """Register the keyboard sender for a user (set before each reply)."""
+        self._senders[user_id] = sender
+
+    def clear_sender(self, user_id: int) -> None:
+        """Unregister the sender after reply completes."""
+        self._senders.pop(user_id, None)
+
+    async def check(self, user_id: int, approval_id: str, command: str, label: str) -> bool:
+        """Send approval keyboard and wait for user response. Returns True to allow."""
+        sender = self._senders.get(user_id)
+        if not sender:
+            return True  # No sender = non-interactive context, allow
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[bool] = loop.create_future()
+        self._pending[approval_id] = future
+
+        try:
+            await sender(approval_id, command, label)
+            return await asyncio.wait_for(future, timeout=APPROVAL_TIMEOUT)
+        except TimeoutError:
+            logger.info("Danger approval timed out for %s (user %d)", label, user_id)
+            return False  # Timeout = deny
+        except Exception:
+            logger.warning("Danger approval failed", exc_info=True)
+            return False
+        finally:
+            self._pending.pop(approval_id, None)
+
+    def resolve(self, approval_id: str, allow: bool) -> bool:
+        """Resolve a pending approval (called by Telegram callback handler)."""
+        future = self._pending.get(approval_id)
+        if future and not future.done():
+            future.set_result(allow)
+            return True
+        return False
+
+
+# Module-level singleton — shared between ChatService and Telegram handlers
+danger_gate = DangerGate()
 
 
 @dataclass
@@ -125,6 +245,58 @@ class ChatService:
         except (json.JSONDecodeError, OSError):
             return {}
 
+    def _extract_user_id(self, session_id: str) -> int | None:
+        """Extract user_id from session_id format: {prefix}-{user_id}-{epoch}."""
+        parts = session_id.rsplit("-", 2)
+        if len(parts) >= 3:
+            try:
+                return int(parts[-2])
+            except ValueError:
+                pass
+        return None
+
+    async def _pre_tool_hook(
+        self,
+        hook_input: dict[str, Any],
+        _matcher: str | None,
+        _context: Any,
+    ) -> SyncHookJSONOutput:
+        """PreToolUse hook: intercept dangerous Bash commands before execution."""
+        tool_input = hook_input.get("tool_input", {})
+        cmd = tool_input.get("command", "")
+        if not cmd:
+            return {}
+
+        danger = _check_dangerous(cmd)
+        if not danger:
+            return {}
+
+        # Extract user from session_id
+        session_id = hook_input.get("session_id", "")
+        user_id = self._extract_user_id(session_id)
+        if user_id is None:
+            return {}
+
+        approval_id = hook_input.get("tool_use_id", "")
+        allowed = await danger_gate.check(user_id, approval_id, cmd, danger)
+
+        _audit_log(cmd, danger)
+
+        if allowed:
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                }
+            }
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": f"User denied: {danger}",
+            }
+        }
+
     def _create_client(self) -> ClaudeSDKClient:
         mcp = self._load_mcp_servers()
         options = ClaudeAgentOptions(
@@ -134,6 +306,15 @@ class ChatService:
             max_turns=300,
             plugins=self._discover_plugins(),
             include_partial_messages=True,
+            hooks={
+                "PreToolUse": [
+                    HookMatcher(
+                        matcher="Bash",
+                        hooks=[self._pre_tool_hook],
+                        timeout=APPROVAL_TIMEOUT + 10,
+                    )
+                ]
+            },
             **({"mcp_servers": mcp} if mcp else {}),
         )
         return ClaudeSDKClient(options=options)
@@ -215,9 +396,9 @@ class ChatService:
                             with contextlib.suppress(Exception):
                                 await on_status(_tool_status(current_tool))
 
-                # Tool use finished — check if it wrote a file
+                # Tool use finished — check if it wrote a file or ran a dangerous command
                 elif event_type == "content_block_stop":
-                    if on_file and current_tool in ("Write", "Edit") and tool_input_json:
+                    if current_tool in ("Write", "Edit") and tool_input_json and on_file:
                         try:
                             import json as _json
 
@@ -227,6 +408,18 @@ class ChatService:
                                 await on_file(file_path)
                         except Exception:
                             pass
+
+                    if current_tool == "Bash" and tool_input_json:
+                        try:
+                            import json as _json
+
+                            tool_data = _json.loads(tool_input_json)
+                            cmd = tool_data.get("command", "")
+                            if cmd:
+                                _audit_log(cmd)
+                        except Exception:
+                            pass
+
                     current_tool = ""
                     tool_input_json = ""
 

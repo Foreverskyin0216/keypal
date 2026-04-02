@@ -61,6 +61,37 @@ for pid in $(pgrep -f "python.*keypal" 2>/dev/null) $(pgrep -f "guardian.sh" 2>/
 done
 sleep 1
 
+# --- Dangerous command watcher (background) ---
+# Tails the danger log and sends Telegram alerts independently of the bot.
+# This catches dangerous commands even if the bot's on_danger callback fails.
+DANGER_LOG="${LOG_DIR}/dangerous-commands.log"
+DANGER_WATCHER_PID=""
+
+start_danger_watcher() {
+  [ -f "$DANGER_LOG" ] || touch "$DANGER_LOG"
+  (
+    tail -n 0 -f "$DANGER_LOG" 2>/dev/null | while IFS= read -r line; do
+      log "DANGER WATCHER: $line"
+      send_telegram "🚨 *Dangerous command detected*
+\`${line}\`"
+    done
+  ) &
+  DANGER_WATCHER_PID=$!
+  log "Danger watcher started (PID=$DANGER_WATCHER_PID)"
+}
+
+stop_danger_watcher() {
+  if [ -n "$DANGER_WATCHER_PID" ]; then
+    kill "$DANGER_WATCHER_PID" 2>/dev/null
+    wait "$DANGER_WATCHER_PID" 2>/dev/null
+    DANGER_WATCHER_PID=""
+  fi
+}
+
+trap 'stop_danger_watcher; exit' EXIT INT TERM
+
+start_danger_watcher
+
 log "Guardian started (channel=$CHANNEL, max_restarts=$MAX_RESTARTS, cooldown=$COOLDOWN)"
 
 while true; do

@@ -2,11 +2,11 @@ import logging
 import random
 from pathlib import Path
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from keypal.channels.telegram import chat_service
-from keypal.services.chat import DraftCallback, FileCallback, KeepAliveCallback
+from keypal.services.chat import DraftCallback, FileCallback, KeepAliveCallback, danger_gate
 from keypal.services.queue import MessageQueue
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,31 @@ def _make_draft_callback(bot: object, chat_id: int) -> DraftCallback:
             logger.debug("send_message_draft failed", exc_info=True)
 
     return on_draft
+
+
+def _make_approval_sender(bot: object, chat_id: int):  # noqa: ANN201
+    """Create a sender that shows an inline keyboard for dangerous command approval."""
+
+    async def sender(approval_id: str, command: str, label: str) -> None:
+        cmd_preview = command.replace("\n", " \\ ")[:200]
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("\u2705 Allow", callback_data=f"danger:allow:{approval_id}"),
+                    InlineKeyboardButton("\U0001f6ab Deny", callback_data=f"danger:deny:{approval_id}"),
+                ]
+            ]
+        )
+        try:
+            await bot.send_message(  # type: ignore[attr-defined]
+                chat_id=chat_id,
+                text=f"\u26a0\ufe0f Dangerous: {label}\n\n{cmd_preview}\n\nAllow this command?",
+                reply_markup=keyboard,
+            )
+        except Exception:
+            logger.debug("Failed to send approval keyboard", exc_info=True)
+
+    return sender
 
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
@@ -129,6 +154,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     await on_keepalive()
 
+    danger_gate.set_sender(user_id, _make_approval_sender(context.bot, chat_id))
     try:
         response = await message_queue.enqueue(
             user_id,
@@ -141,6 +167,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except Exception:
         logger.exception("Failed to process message for user %d", user_id)
         await update.message.reply_text("Sorry, something went wrong. Please try again.")
+    finally:
+        danger_gate.clear_sender(user_id)
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -172,6 +200,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     await on_keepalive()
 
+    danger_gate.set_sender(user_id, _make_approval_sender(context.bot, chat_id))
     try:
         response = await message_queue.enqueue(
             user_id,
@@ -184,6 +213,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception:
         logger.exception("Failed to process photo for user %d", user_id)
         await update.message.reply_text("Sorry, I couldn't process your image.")
+    finally:
+        danger_gate.clear_sender(user_id)
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,6 +247,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     await on_keepalive()
 
+    danger_gate.set_sender(user_id, _make_approval_sender(context.bot, chat_id))
     try:
         response = await message_queue.enqueue(
             user_id,
@@ -228,6 +260,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception:
         logger.exception("Failed to process document for user %d", user_id)
         await update.message.reply_text("Sorry, I couldn't process your file.")
+    finally:
+        danger_gate.clear_sender(user_id)
 
 
 def register_message_handlers(application: Application) -> None:  # type: ignore[type-arg]

@@ -43,6 +43,34 @@ running commands that could affect other services, or exposing ports), explicitl
 - Whether it's reversible
 Example: "Note: this will delete ~/prototypes/todo-app/ — this cannot be undone. OK to proceed?"
 
+## Safety: Dangerous Command Guard
+NEVER run the following commands without showing the EXACT command to the user and receiving
+explicit confirmation ("yes", "ok", "do it"). No exceptions, even if part of a larger task:
+
+Destructive:
+  rm -rf, rm -r (recursive delete), shred, unlink on directories
+  dd if=, mkfs, fdisk, parted (disk operations)
+  > /dev/sda or similar device writes
+File permission / ownership:
+  chmod -R 777, chmod -R 000, chown -R (broad recursive changes)
+System-level:
+  kill -9 (except for processes you just spawned), killall, pkill (broad patterns)
+  systemctl stop/disable, launchctl unload (system services)
+  reboot, shutdown, halt, init
+Network:
+  iptables -F (flush all rules), ufw disable
+  curl/wget piped to sh/bash (remote code execution)
+Data:
+  DROP DATABASE, DROP TABLE, TRUNCATE (database operations)
+  git push --force, git reset --hard (on shared branches)
+
+When you must run a dangerous command:
+1. State what you're about to do in plain language
+2. Show the exact command
+3. Explain what it will affect and whether it's reversible
+4. Wait for explicit "yes" or "ok" — do NOT proceed on ambiguous responses
+5. After running, log it: append a line to ~/logs/keypal/dangerous-commands.log with timestamp and command
+
 ## Iterative Work Mode (Ralph Loop)
 When the user asks you to DO something (build, deploy, fix, create, schedule, etc.),
 automatically use ralph-loop to iterate until the task is complete:

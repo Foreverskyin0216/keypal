@@ -19,14 +19,20 @@ def _run_script(name: str, *args: str) -> dict | list:
     from pathlib import Path
 
     script = Path.home() / ".claude" / "scripts" / name
+    if not script.exists():
+        logger.error("Script not found: %s", script)
+        return {"status": "error", "message": f"Script not found: {name}"}
     result = subprocess.run(
         [str(script), *args],
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0:
+        logger.warning("Script %s failed (exit %d): %s", name, result.returncode, result.stderr)
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
+        logger.error("Script %s returned invalid JSON: stdout=%r stderr=%r", name, result.stdout, result.stderr)
         return {"status": "error", "message": result.stderr or result.stdout or "Unknown error"}
 
 
@@ -49,6 +55,15 @@ async def mcp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not update.message:
         return
     data = _run_script("list-mcp.sh")
+
+    # Script error — show the actual problem instead of "no MCPs"
+    if isinstance(data, dict) and data.get("status") == "error":
+        logger.error("list-mcp.sh error: %s", data.get("message"))
+        await update.message.reply_text(
+            "Failed to list MCP servers. Check logs for details.\nTry asking me to list MCP servers instead.",
+        )
+        return
+
     if isinstance(data, list) and len(data) > 0:
         keyboard = _build_mcp_keyboard(data)
         await update.message.reply_text(
