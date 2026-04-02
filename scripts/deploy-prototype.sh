@@ -137,4 +137,26 @@ else
   [ -z "$HOST" ] && HOST="localhost"
 fi
 
-result "ok" "Deployed successfully" "$PORT" "$PID" "http://${HOST}:${PORT}"
+# Add nginx reverse proxy location if nginx is running
+NGINX_PROTO_DIR="/etc/nginx/conf.d/prototypes"
+if [ -d "$NGINX_PROTO_DIR" ] && command -v nginx >/dev/null 2>&1; then
+  cat > "${NGINX_PROTO_DIR}/${NAME}.conf" <<NGINX_LOC
+location /${NAME}/ {
+    proxy_pass http://127.0.0.1:${PORT}/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+}
+NGINX_LOC
+  nginx -t -q 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
+  PROTO="https"
+  URL="${PROTO}://${HOST}/${NAME}/"
+else
+  URL="http://${HOST}:${PORT}"
+fi
+
+result "ok" "Deployed successfully" "$PORT" "$PID" "$URL"

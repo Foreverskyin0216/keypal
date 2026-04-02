@@ -48,6 +48,10 @@ if [ "$TARGET" = "--all" ]; then
 
   sleep 1
 
+  # Remove all nginx prototype locations
+  rm -f /etc/nginx/conf.d/prototypes/*.conf 2>/dev/null
+  nginx -t -q 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
+
   # Reset registry and logs
   echo '{}' > "$REGISTRY"
   rm -rf "$LOG_DIR"
@@ -88,6 +92,10 @@ fi
 if [ -n "$DIR" ] && [ -d "$DIR" ]; then
   rm -rf "$DIR"
 fi
+
+# Remove nginx location block
+rm -f "/etc/nginx/conf.d/prototypes/${TARGET}.conf" 2>/dev/null
+nginx -t -q 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
 
 # Delete logs
 rm -f "${LOG_DIR}/${TARGET}.log"

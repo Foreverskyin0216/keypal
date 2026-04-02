@@ -42,6 +42,6 @@ while IFS=$'\t' read -r name port pid dir cmd started_at; do
     --arg cmd "$cmd" \
     --arg status "$status" \
     --arg started_at "$started_at" \
-    --arg url "http://${HOST}:${port}" \
+    --arg url "$([ -d /etc/nginx/conf.d/prototypes ] && echo "https://${HOST}/${name}/" || echo "http://${HOST}:${port}")" \
     '{name: $name, port: ($port | tonumber), pid: $pid, dir: $dir, command: $cmd, status: $status, started_at: $started_at, url: $url}'
 done | jq -s '.'

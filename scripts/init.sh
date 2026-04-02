@@ -198,7 +198,21 @@ if [ -f "$CLEANUP_SCRIPT" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 10. Check dependencies
+# 10. Check SSL certificate expiry
+# ---------------------------------------------------------------------------
+
+CHECK_CERT="${SCRIPTS_DIR}/check-cert.sh"
+if [ -f "$CHECK_CERT" ] && [ -n "${PUBLIC_DOMAIN:-}" ]; then
+  CERT_RESULT=$(bash "$CHECK_CERT" "$PUBLIC_DOMAIN" 2>/dev/null || true)
+  CERT_STATUS=$(echo "$CERT_RESULT" | jq -r '.status // "unknown"' 2>/dev/null)
+  if [ "$CERT_STATUS" = "warning" ] || [ "$CERT_STATUS" = "error" ]; then
+    CERT_MSG=$(echo "$CERT_RESULT" | jq -r '.message // ""' 2>/dev/null)
+    log_fix "SSL: $CERT_MSG"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 11. Check dependencies
 # ---------------------------------------------------------------------------
 
 command -v jq >/dev/null 2>&1 || log_error "jq is not installed"

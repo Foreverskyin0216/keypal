@@ -51,6 +51,13 @@ if [ -n "$PORT" ]; then
   fuser -k "$PORT/tcp" 2>/dev/null || true
 fi
 
+# Remove nginx location block if it exists
+NGINX_CONF="/etc/nginx/conf.d/prototypes/${NAME}.conf"
+if [ -f "$NGINX_CONF" ]; then
+  rm -f "$NGINX_CONF"
+  nginx -t -q 2>/dev/null && sudo systemctl reload nginx 2>/dev/null || true
+fi
+
 # Update status in registry
 UPDATED=$(jq --arg n "$NAME" '.[$n].status = "stopped" | .[$n].pid = null' "$REGISTRY")
 echo "$UPDATED" > "$REGISTRY"
