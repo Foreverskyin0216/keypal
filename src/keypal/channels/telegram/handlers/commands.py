@@ -22,7 +22,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "*Commands:*",
             "/services — Manage hosted prototypes",
             "/schedules — Manage scheduled tasks",
-            "/plugins — Browse & install plugins",
             "/mcp — Manage MCP server integrations",
         ]
         if settings.enable_git:
