@@ -17,10 +17,14 @@ if [ ! -f "$REGISTRY" ] || [ "$(jq 'length' "$REGISTRY")" = "0" ]; then
   exit 0
 fi
 
-# Get public IP once
-PUBLIC_IP=$(curl -sf -m 2 http://169.254.169.254/opc/v1/vnics/ 2>/dev/null | jq -r '.[0].publicIp // empty' 2>/dev/null)
-[ -z "$PUBLIC_IP" ] && PUBLIC_IP=$(curl -sf -m 2 ifconfig.me 2>/dev/null)
-[ -z "$PUBLIC_IP" ] && PUBLIC_IP="localhost"
+# Use PUBLIC_DOMAIN env var if set, otherwise resolve public IP
+if [ -n "${PUBLIC_DOMAIN:-}" ]; then
+  HOST="$PUBLIC_DOMAIN"
+else
+  HOST=$(curl -sf -m 2 http://169.254.169.254/opc/v1/vnics/ 2>/dev/null | jq -r '.[0].publicIp // empty' 2>/dev/null)
+  [ -z "$HOST" ] && HOST=$(curl -sf -m 2 ifconfig.me 2>/dev/null)
+  [ -z "$HOST" ] && HOST="localhost"
+fi
 
 # Check each service's actual status and build output
 jq -r 'to_entries[] | "\(.key)\t\(.value.port)\t\(.value.pid)\t\(.value.dir)\t\(.value.command)\t\(.value.started_at)"' "$REGISTRY" | \
@@ -38,6 +42,6 @@ while IFS=$'\t' read -r name port pid dir cmd started_at; do
     --arg cmd "$cmd" \
     --arg status "$status" \
     --arg started_at "$started_at" \
-    --arg url "http://${PUBLIC_IP}:${port}" \
+    --arg url "http://${HOST}:${port}" \
     '{name: $name, port: ($port | tonumber), pid: $pid, dir: $dir, command: $cmd, status: $status, started_at: $started_at, url: $url}'
 done | jq -s '.'

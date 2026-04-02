@@ -128,9 +128,13 @@ UPDATED=$(jq --arg n "$NAME" --arg p "$PORT" --arg pid "$PID" --arg dir "$DIR" -
 ' "$REGISTRY")
 echo "$UPDATED" > "$REGISTRY"
 
-# Get public IP (cloud metadata > external service > fallback to localhost)
-PUBLIC_IP=$(curl -sf -m 2 http://169.254.169.254/opc/v1/vnics/ 2>/dev/null | jq -r '.[0].publicIp // empty' 2>/dev/null)
-[ -z "$PUBLIC_IP" ] && PUBLIC_IP=$(curl -sf -m 2 ifconfig.me 2>/dev/null)
-[ -z "$PUBLIC_IP" ] && PUBLIC_IP="localhost"
+# Use PUBLIC_DOMAIN env var if set, otherwise resolve public IP
+if [ -n "${PUBLIC_DOMAIN:-}" ]; then
+  HOST="$PUBLIC_DOMAIN"
+else
+  HOST=$(curl -sf -m 2 http://169.254.169.254/opc/v1/vnics/ 2>/dev/null | jq -r '.[0].publicIp // empty' 2>/dev/null)
+  [ -z "$HOST" ] && HOST=$(curl -sf -m 2 ifconfig.me 2>/dev/null)
+  [ -z "$HOST" ] && HOST="localhost"
+fi
 
-result "ok" "Deployed successfully" "$PORT" "$PID" "http://${PUBLIC_IP}:${PORT}"
+result "ok" "Deployed successfully" "$PORT" "$PID" "http://${HOST}:${PORT}"
