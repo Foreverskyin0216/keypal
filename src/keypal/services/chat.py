@@ -24,9 +24,11 @@ logger = logging.getLogger(__name__)
 
 CLAUDE_DIR = Path.home() / ".claude"
 KEYPAL_DIR = Path.home() / ".keypal"
+PROJECT_DIR = Path(__file__).resolve().parents[2]  # src/keypal/services/chat.py → project root
 RALPH_LOOP_PLUGIN = CLAUDE_DIR / "plugins" / "marketplaces" / "claude-plugins-official" / "plugins" / "ralph-loop"
 LOCAL_PLUGIN = CLAUDE_DIR / "plugins" / "local" / "plugin-manager"
-MCP_REGISTRY = KEYPAL_DIR / "mcp.json"
+NATIVE_MCP = PROJECT_DIR / ".mcp.json"  # Claude Code native (.mcp.json in project root)
+LEGACY_MCP = KEYPAL_DIR / "mcp.json"  # Legacy custom registry
 
 # Minimum interval between draft updates (seconds)
 DRAFT_UPDATE_INTERVAL = 0.4
@@ -234,16 +236,32 @@ class ChatService:
 
     @staticmethod
     def _load_mcp_servers() -> dict[str, Any]:
-        """Load MCP server config from ~/.keypal/mcp.json."""
+        """Load MCP servers from .mcp.json (native) and ~/.keypal/mcp.json (legacy)."""
         import json
 
-        if not MCP_REGISTRY.is_file():
-            return {}
-        try:
-            with MCP_REGISTRY.open() as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return {}
+        servers: dict[str, Any] = {}
+
+        # Native: project .mcp.json (Claude Code format: {mcpServers: {...}})
+        if NATIVE_MCP.is_file():
+            try:
+                with NATIVE_MCP.open() as f:
+                    data = json.load(f)
+                servers.update(data.get("mcpServers", {}))
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # Legacy: ~/.keypal/mcp.json (flat format: {name: {command, args}})
+        if LEGACY_MCP.is_file():
+            try:
+                with LEGACY_MCP.open() as f:
+                    legacy = json.load(f)
+                for name, cfg in legacy.items():
+                    if name not in servers:  # native takes priority
+                        servers[name] = cfg
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        return servers
 
     def _extract_user_id(self, session_id: str) -> int | None:
         """Extract user_id from session_id format: {prefix}-{user_id}-{epoch}."""

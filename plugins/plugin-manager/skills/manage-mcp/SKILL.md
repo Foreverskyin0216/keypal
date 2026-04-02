@@ -10,7 +10,7 @@ TRIGGER when: the user wants to add new capabilities like browser automation, ca
 - **List**: `~/.claude/scripts/list-mcp.sh`
 - **Uninstall**: `~/.claude/scripts/uninstall-mcp.sh <name>`
 
-IMPORTANT: ONLY use these scripts to manage MCP servers. NEVER use `claude mcp add` or modify `~/.claude/settings.json` directly — the bot reads from `~/.keypal/mcp.json` exclusively.
+You can use either these scripts OR `claude mcp add` — both work. The scripts write to the project's `.mcp.json` file, which is the same format Claude Code uses natively.
 
 ## Common MCP Servers
 
@@ -50,7 +50,7 @@ Some MCP servers require extra downloads beyond the npm package itself. The inst
    - The script pre-downloads npm packages and known dependencies automatically.
    - Check the `warmup` field in the JSON output to see what was pre-installed.
 3. **Verify the install**: run `list-mcp.sh` and confirm the new MCP appears in the list.
-   - If it doesn't appear, something went wrong — check `~/.keypal/mcp.json` directly.
+   - If it doesn't appear, something went wrong — check the project `.mcp.json` directly.
 4. Tell the user: "Installed and verified! Restart the bot or use /reset for it to take effect."
 5. Report what was pre-installed (from the warmup field) so the user knows nothing will surprise them later.
 
@@ -64,9 +64,10 @@ Some MCP servers require extra downloads beyond the npm package itself. The inst
 
 ## Important Notes
 
-- MCP servers are registered in `~/.keypal/mcp.json` — this is the ONLY registry the bot reads.
+- MCP servers are registered in the project's `.mcp.json` (Claude Code native format).
+- The bot also checks `~/.keypal/mcp.json` for legacy entries.
 - Changes require bot restart to take effect (MCP servers are loaded at client creation time).
-- Some MCP servers need environment variables (API keys) — add them to `~/.keypal/.env` or the system `.env`.
+- Some MCP servers need environment variables (API keys) — add them to `.env`.
 - The bot loads all registered MCP servers automatically via `ChatService`.
 - Always be transparent about what's being downloaded and how long it might take.
 
