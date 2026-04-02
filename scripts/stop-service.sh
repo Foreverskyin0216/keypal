@@ -23,7 +23,7 @@ result() {
 
 PID=$(jq -r --arg n "$NAME" '.[$n].pid // empty' "$REGISTRY")
 
-[ -n "$PID" ] || result "error" "Service '$NAME' not found in registry"
+[ -n "$PID" ] || result "ok" "Service '$NAME' already stopped"
 
 # Kill process and all children (process group)
 if kill -0 "$PID" 2>/dev/null; then

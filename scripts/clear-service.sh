@@ -66,7 +66,7 @@ fi
 PID=$(jq -r --arg n "$TARGET" '.[$n].pid // empty' "$REGISTRY")
 DIR=$(jq -r --arg n "$TARGET" '.[$n].dir // empty' "$REGISTRY")
 
-[ -n "$PID" ] || [ -n "$DIR" ] || result "error" "Service '$TARGET' not found"
+[ -n "$PID" ] || [ -n "$DIR" ] || result "ok" "Service '$TARGET' already cleared"
 
 # Stop process and all children
 if [ -n "$PID" ] && [ "$PID" != "null" ] && kill -0 "$PID" 2>/dev/null; then
