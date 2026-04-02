@@ -16,6 +16,11 @@
 
 set -euo pipefail
 
+# Source project .env for PUBLIC_DOMAIN etc.
+SCRIPT_REAL="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+_PROJECT_DIR="$(cd "$(dirname "$SCRIPT_REAL")/.." && pwd)"
+[ -f "${_PROJECT_DIR}/.env" ] && set -a && . "${_PROJECT_DIR}/.env" && set +a
+
 NAME="${1:?Usage: deploy-prototype.sh <name> <dir> [port] [command]}"
 DIR="${2:?Usage: deploy-prototype.sh <name> <dir> [port] [command]}"
 PORT="${3:-}"

@@ -10,6 +10,11 @@
 
 set -euo pipefail
 
+# Source project .env for PUBLIC_DOMAIN etc.
+SCRIPT_REAL="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+_PROJECT_DIR="$(cd "$(dirname "$SCRIPT_REAL")/.." && pwd)"
+[ -f "${_PROJECT_DIR}/.env" ] && set -a && . "${_PROJECT_DIR}/.env" && set +a
+
 REGISTRY="${HOME}/prototypes/registry.json"
 
 if [ ! -f "$REGISTRY" ] || [ "$(jq 'length' "$REGISTRY")" = "0" ]; then
