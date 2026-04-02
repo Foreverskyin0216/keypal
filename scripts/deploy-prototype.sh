@@ -53,7 +53,11 @@ DIR="$(cd "$DIR" && pwd)"
 EXISTING_PID=$(jq -r --arg n "$NAME" '.[$n].pid // empty' "$REGISTRY")
 if [ -n "$EXISTING_PID" ] && kill -0 "$EXISTING_PID" 2>/dev/null; then
   EXISTING_PORT=$(jq -r --arg n "$NAME" '.[$n].port' "$REGISTRY")
-  result "ok" "Already running" "$EXISTING_PORT" "$EXISTING_PID" "http://localhost:${EXISTING_PORT}"
+  if [ -n "${PUBLIC_DOMAIN:-}" ] && [ -d /etc/nginx/conf.d/prototypes ]; then
+    result "ok" "Already running" "$EXISTING_PORT" "$EXISTING_PID" "https://${PUBLIC_DOMAIN}/${NAME}/"
+  else
+    result "ok" "Already running" "$EXISTING_PORT" "$EXISTING_PID" "http://${PUBLIC_DOMAIN:-localhost}:${EXISTING_PORT}"
+  fi
 fi
 
 # Auto-assign port if not specified
