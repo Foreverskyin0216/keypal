@@ -47,7 +47,6 @@ def _build_mcp_keyboard(servers: list[dict]) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Uninstall", callback_data=f"mcp:remove:{name}"),
             ]
         )
-    buttons.append([InlineKeyboardButton("🔄 Refresh", callback_data="mcp:refresh")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -88,20 +87,6 @@ async def mcp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     name = parts[2] if len(parts) > 2 else ""
 
     if action == "noop":
-        return
-
-    if action == "refresh":
-        data = _run_script("list-mcp.sh")
-        servers = data if isinstance(data, list) else []
-        if servers:
-            keyboard = _build_mcp_keyboard(servers)
-            await query.edit_message_text(
-                f"🔌 *MCP Servers* ({len(servers)} installed)",
-                parse_mode="Markdown",
-                reply_markup=keyboard,
-            )
-        else:
-            await query.edit_message_text("No MCP servers installed.")
         return
 
     if action == "remove":
