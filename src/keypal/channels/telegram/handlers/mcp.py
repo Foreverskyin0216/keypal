@@ -36,23 +36,8 @@ def _run_script(name: str, *args: str) -> dict | list:
         return {"status": "error", "message": result.stderr or result.stdout or "Unknown error"}
 
 
-AVAILABLE_MCPS: dict[str, tuple[str, list[str]]] = {
-    "playwright": ("npx", ["-y", "@playwright/mcp@latest"]),
-    "browser": ("npx", ["@anthropic-ai/mcp-browser"]),
-    "fetch": ("npx", ["@anthropic-ai/mcp-fetch"]),
-    "filesystem": ("npx", ["@anthropic-ai/mcp-filesystem", "~/"]),
-    "github": ("npx", ["@anthropic-ai/mcp-github"]),
-    "slack": ("npx", ["@anthropic-ai/mcp-slack"]),
-    "postgres": ("npx", ["@anthropic-ai/mcp-postgres"]),
-    "sqlite": ("npx", ["@anthropic-ai/mcp-sqlite"]),
-}
-
-
 def _build_mcp_keyboard(servers: list[dict]) -> InlineKeyboardMarkup:
-    installed = {srv["name"] for srv in servers}
     buttons = []
-
-    # Installed MCPs — show Uninstall button
     for srv in servers:
         name = srv["name"]
         cmd = srv.get("command", "")
@@ -62,17 +47,6 @@ def _build_mcp_keyboard(servers: list[dict]) -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Uninstall", callback_data=f"mcp:remove:{name}"),
             ]
         )
-
-    # Available but not installed — show Install button
-    not_installed = [n for n in AVAILABLE_MCPS if n not in installed]
-    for name in not_installed:
-        buttons.append(
-            [
-                InlineKeyboardButton(f"  {name}", callback_data=f"mcp:noop:{name}"),
-                InlineKeyboardButton("Install", callback_data=f"mcp:install:{name}"),
-            ]
-        )
-
     buttons.append([InlineKeyboardButton("🔄 Refresh", callback_data="mcp:refresh")])
     return InlineKeyboardMarkup(buttons)
 
@@ -82,7 +56,6 @@ async def mcp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     data = _run_script("list-mcp.sh")
 
-    # Script error — show the actual problem instead of "no MCPs"
     if isinstance(data, dict) and data.get("status") == "error":
         logger.error("list-mcp.sh error: %s", data.get("message"))
         await update.message.reply_text(
@@ -91,13 +64,17 @@ async def mcp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     servers = data if isinstance(data, list) else []
-    installed_count = len(servers)
-    keyboard = _build_mcp_keyboard(servers)
-    await update.message.reply_text(
-        f"🔌 *MCP Servers* ({installed_count} installed)",
-        parse_mode="Markdown",
-        reply_markup=keyboard,
-    )
+    if servers:
+        keyboard = _build_mcp_keyboard(servers)
+        await update.message.reply_text(
+            f"🔌 *MCP Servers* ({len(servers)} installed)",
+            parse_mode="Markdown",
+            reply_markup=keyboard,
+        )
+    else:
+        await update.message.reply_text(
+            "No MCP servers installed.\nJust tell me what you need — I'll find and install the right one!",
+        )
 
 
 async def mcp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -116,35 +93,15 @@ async def mcp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if action == "refresh":
         data = _run_script("list-mcp.sh")
         servers = data if isinstance(data, list) else []
-        keyboard = _build_mcp_keyboard(servers)
-        await query.edit_message_text(
-            f"🔌 *MCP Servers* ({len(servers)} installed)",
-            parse_mode="Markdown",
-            reply_markup=keyboard,
-        )
-        return
-
-    if action == "install":
-        mcp_info = AVAILABLE_MCPS.get(name)
-        if not mcp_info:
-            await query.edit_message_text(f"Unknown MCP: {name}")
-            return
-        cmd, args = mcp_info
-        result = _run_script("install-mcp.sh", name, cmd, *args)
-        if result.get("status") == "ok":
-            msg = f"✅ Installed *{name}*. Restart bot to activate."
+        if servers:
+            keyboard = _build_mcp_keyboard(servers)
+            await query.edit_message_text(
+                f"🔌 *MCP Servers* ({len(servers)} installed)",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
         else:
-            msg = f"Error: {result.get('message')}"
-
-        data = _run_script("list-mcp.sh")
-        servers = data if isinstance(data, list) else []
-        keyboard = _build_mcp_keyboard(servers)
-        count = sum(1 for s in servers if s.get("source") == "native" or "source" not in s)
-        await query.edit_message_text(
-            f"{msg}\n\n🔌 *MCP Servers* ({count} installed)",
-            parse_mode="Markdown",
-            reply_markup=keyboard,
-        )
+            await query.edit_message_text("No MCP servers installed.")
         return
 
     if action == "remove":
@@ -156,13 +113,15 @@ async def mcp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         data = _run_script("list-mcp.sh")
         servers = data if isinstance(data, list) else []
-        keyboard = _build_mcp_keyboard(servers)
-        count = sum(1 for s in servers if s.get("source") == "native" or "source" not in s)
-        await query.edit_message_text(
-            f"{msg}\n\n🔌 *MCP Servers* ({count} installed)",
-            parse_mode="Markdown",
-            reply_markup=keyboard,
-        )
+        if servers:
+            keyboard = _build_mcp_keyboard(servers)
+            await query.edit_message_text(
+                f"{msg}\n\n🔌 *MCP Servers* ({len(servers)} installed)",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+        else:
+            await query.edit_message_text(f"{msg}\n\nNo MCP servers installed.", parse_mode="Markdown")
 
 
 def register_mcp_handlers(application: Application) -> None:  # type: ignore[type-arg]
