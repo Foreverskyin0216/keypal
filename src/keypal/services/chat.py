@@ -219,9 +219,12 @@ class ChatService:
     Supports streaming responses via Telegram's sendMessageDraft.
     """
 
-    def __init__(self, system_prompt: str = DEFAULT_SYSTEM_PROMPT, session_prefix: str = "default") -> None:
+    def __init__(
+        self, system_prompt: str = DEFAULT_SYSTEM_PROMPT, session_prefix: str = "default", model: str = ""
+    ) -> None:
         self._system_prompt = system_prompt
         self._session_prefix = session_prefix
+        self._model = model or settings.claude_model
         self._client: ClaudeSDKClient | None = None
         self._session_epochs: dict[int, int] = {}  # user_id -> epoch counter
         self._usage: dict[int, UsageStats] = {}  # user_id -> usage stats
@@ -319,7 +322,7 @@ class ChatService:
         mcp = self._load_mcp_servers()
         options = ClaudeAgentOptions(
             system_prompt=self._system_prompt,
-            model=settings.claude_model,
+            model=self._model,
             permission_mode="bypassPermissions",
             max_turns=300,
             plugins=self._discover_plugins(),

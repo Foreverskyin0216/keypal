@@ -6,4 +6,4 @@ _prompt = TELEGRAM_SYSTEM_PROMPT
 if settings.enable_git:
     _prompt += GIT_PROMPT_ADDON
 
-chat_service = ChatService(system_prompt=_prompt, session_prefix="tg")
+chat_service = ChatService(system_prompt=_prompt, session_prefix="tg", model=settings.tg_claude_model)
